@@ -249,11 +249,11 @@ ipcMain.handle('get-dashboard-stats', async () => {
       prisma.vehicle.count({ where: { status: 'RENTED' } }),
       prisma.rental.aggregate({
         _sum: { totalAmount: true },
-        where: { returnDate: { gte: today } }
+        where: { status: 'COMPLETED', returnDate: { gte: today } }
       }),
       prisma.rental.aggregate({
         _sum: { totalAmount: true },
-        where: { returnDate: { gte: startOfMonth } }
+        where: { status: 'COMPLETED', returnDate: { gte: startOfMonth } }
       }),
       prisma.rental.findMany({
         where: { status: 'ACTIVE' },
@@ -315,6 +315,15 @@ ipcMain.handle('create-vehicle', async (_, data) => {
 });
 
 ipcMain.handle('update-vehicle', async (_, { id, ...data }) => {
+  // Prevent manually changing status to AVAILABLE if vehicle has active rentals
+  if (data.status === 'AVAILABLE') {
+    const activeRental = await prisma.rental.findFirst({
+      where: { vehicleId: id, status: 'ACTIVE' }
+    });
+    if (activeRental) {
+      throw new Error('Cannot set vehicle to AVAILABLE — it has an active rental. Complete the return first.');
+    }
+  }
   return await prisma.vehicle.update({ where: { id }, data });
 });
 
@@ -363,19 +372,20 @@ ipcMain.handle('create-rental', async (_, data) => {
     customer = await prisma.customer.create({ data: customerData });
   }
 
-  // Create rental
-  const rental = await prisma.rental.create({
-    data: {
-      ...rentalData,
-      customerId: customer.id
-    }
-  });
-
-  // Update vehicle status
-  await prisma.vehicle.update({
-    where: { id: rentalData.vehicleId },
-    data: { status: 'RENTED' }
-  });
+  // Atomic transaction: create rental + update vehicle status together
+  // If either fails, both are rolled back — prevents status mismatch
+  const [rental] = await prisma.$transaction([
+    prisma.rental.create({
+      data: {
+        ...rentalData,
+        customerId: customer.id
+      }
+    }),
+    prisma.vehicle.update({
+      where: { id: rentalData.vehicleId },
+      data: { status: 'RENTED' }
+    })
+  ]);
 
   return rental;
 });
@@ -388,18 +398,20 @@ ipcMain.handle('toggle-rental-accident', async (_, { rentalId, isAccident }) => 
 });
 
 ipcMain.handle('return-vehicle', async (_, { rentalId, returnData, vehicleId }) => {
-  const rental = await prisma.rental.update({
-    where: { id: rentalId },
-    data: {
-      ...returnData,
-      status: 'COMPLETED'
-    }
-  });
-
-  await prisma.vehicle.update({
-    where: { id: vehicleId },
-    data: { status: 'AVAILABLE' }
-  });
+  // Atomic transaction: update rental + update vehicle status together
+  const [rental] = await prisma.$transaction([
+    prisma.rental.update({
+      where: { id: rentalId },
+      data: {
+        ...returnData,
+        status: 'COMPLETED'
+      }
+    }),
+    prisma.vehicle.update({
+      where: { id: vehicleId },
+      data: { status: 'AVAILABLE' }
+    })
+  ]);
 
   return rental;
 });

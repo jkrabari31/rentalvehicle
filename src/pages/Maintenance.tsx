@@ -33,10 +33,14 @@ export function Maintenance() {
   }, []);
 
   const loadData = async () => {
-    const v = await invokeIPC<any[]>('get-vehicles');
-    setVehicles(v || []);
-    const m = await invokeIPC<any[]>('get-maintenance');
-    setMaintenanceRecords(m || []);
+    try {
+      const v = await invokeIPC<any[]>('get-vehicles');
+      setVehicles(v || []);
+      const m = await invokeIPC<any[]>('get-maintenance');
+      setMaintenanceRecords(m || []);
+    } catch (err: any) {
+      console.error('Failed to load maintenance data:', err);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

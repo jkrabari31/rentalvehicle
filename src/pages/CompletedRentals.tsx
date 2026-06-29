@@ -64,9 +64,10 @@ export function CompletedRentals() {
   const filteredRentals = useMemo(() => {
     const s = search.toLowerCase();
     return rentals.filter(r => 
-      r.customer.name.toLowerCase().includes(s) || 
-      r.vehicle.vehicleName.toLowerCase().includes(s) ||
-      String(r.id).includes(s)
+      (r.customer?.name || '').toLowerCase().includes(s) || 
+      (r.vehicle?.vehicleName || '').toLowerCase().includes(s) ||
+      (r.vehicle?.vehicleNumber || '').toLowerCase().includes(s) ||
+      String(r.id || '').includes(s)
     );
   }, [rentals, search]);
 

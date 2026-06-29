@@ -36,8 +36,12 @@ export function Vehicles() {
   }, []);
 
   const loadVehicles = async () => {
-    const data = await invokeIPC<any[]>('get-vehicles');
-    setVehicles(data || []);
+    try {
+      const data = await invokeIPC<any[]>('get-vehicles');
+      setVehicles(data || []);
+    } catch (err: any) {
+      console.error('Failed to load vehicles:', err);
+    }
   };
 
   const handleOpenDialog = (vehicle?: any) => {
@@ -77,13 +81,17 @@ export function Vehicles() {
       rate24hr: formData.rate24hr ? Number(formData.rate24hr) : null,
     };
 
-    if (editingVehicle) {
-      await invokeIPC('update-vehicle', { id: editingVehicle.id, ...payload });
-    } else {
-      await invokeIPC('create-vehicle', payload);
+    try {
+      if (editingVehicle) {
+        await invokeIPC('update-vehicle', { id: editingVehicle.id, ...payload });
+      } else {
+        await invokeIPC('create-vehicle', payload);
+      }
+      setIsDialogOpen(false);
+      loadVehicles();
+    } catch (err: any) {
+      alert('Failed to save vehicle: ' + err.message);
     }
-    setIsDialogOpen(false);
-    loadVehicles();
   };
 
   const vehiclesGrid = useMemo(() => (

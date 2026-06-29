@@ -15,8 +15,12 @@ export function Dashboard() {
   }, []);
 
   const loadStats = async () => {
-    const data = await invokeIPC<any>('get-dashboard-stats');
-    setStats(data);
+    try {
+      const data = await invokeIPC<any>('get-dashboard-stats');
+      setStats(data);
+    } catch (err: any) {
+      console.error('Failed to load dashboard:', err);
+    }
   };
 
   if (!stats) return (
