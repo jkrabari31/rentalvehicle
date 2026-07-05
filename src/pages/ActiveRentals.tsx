@@ -39,6 +39,13 @@ export function ActiveRentals() {
     notes: ''
   });
 
+  const [isExchangeOpen, setIsExchangeOpen] = useState(false);
+  const [exchangeFormData, setExchangeFormData] = useState({
+    newVehicleId: '',
+    oldVehicleStatus: 'INACTIVE',
+    reason: ''
+  });
+
   const [returnFormData, setReturnFormData] = useState({
     returnDate: new Date(),
     settlementAmount: 0,
@@ -192,6 +199,16 @@ export function ActiveRentals() {
     setIsReturnOpen(true);
   };
 
+  const openExchangeDialog = (rental: any) => {
+    setSelectedRental(rental);
+    setExchangeFormData({
+      newVehicleId: '',
+      oldVehicleStatus: 'INACTIVE',
+      reason: ''
+    });
+    setIsExchangeOpen(true);
+  };
+
   const toggleAccident = async (rental: any) => {
     try {
       await invokeIPC('toggle-rental-accident', { rentalId: rental.id, isAccident: !rental.isAccident });
@@ -298,6 +315,31 @@ export function ActiveRentals() {
       loadAvailableVehicles();
     } catch (err: any) {
         alert("Failed to complete return: " + err.message);
+    }
+  };
+
+  const handleExchange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedRental || !exchangeFormData.newVehicleId || !exchangeFormData.reason) return;
+
+    try {
+      const now = format(new Date(), 'PPp');
+      const oldVehicleName = `${selectedRental.vehicle.vehicleName} (${selectedRental.vehicle.vehicleNumber})`;
+      const noteAppend = `[VEHICLE EXCHANGED on ${now}] Swapped from ${oldVehicleName}. Reason: ${exchangeFormData.reason}`;
+
+      await invokeIPC('swap-vehicle', {
+        rentalId: selectedRental.id,
+        oldVehicleId: selectedRental.vehicleId,
+        newVehicleId: exchangeFormData.newVehicleId,
+        oldVehicleStatus: exchangeFormData.oldVehicleStatus,
+        notesAppend: noteAppend
+      });
+      setIsExchangeOpen(false);
+      setSelectedRental(null);
+      loadRentals();
+      loadAvailableVehicles();
+    } catch (err: any) {
+      alert("Failed to exchange vehicle: " + err.message);
     }
   };
 
@@ -425,9 +467,12 @@ export function ActiveRentals() {
             </div>
           </CardContent>
           <div className={`p-4 pt-0 border-t mt-auto flex flex-col ${r.isAccident ? 'bg-red-50/30 border-red-200 dark:bg-red-900/10 dark:border-red-800' : 'bg-slate-50/50 border-slate-100 dark:bg-slate-900/30 dark:border-slate-800'}`}>
-            <div className="mt-4">
-              <Button onClick={() => openReturnDialog(r)} className={`w-full shadow-sm ${r.isAccident ? 'bg-red-600 hover:bg-red-700 text-white' : ''}`}>
-                <CheckCircle className="w-4 h-4 mr-2" /> Complete Return
+            <div className="mt-4 flex space-x-2">
+              <Button onClick={() => openReturnDialog(r)} className={`flex-1 shadow-sm ${r.isAccident ? 'bg-red-600 hover:bg-red-700 text-white' : ''}`}>
+                <CheckCircle className="w-4 h-4 mr-1" /> Return
+              </Button>
+              <Button variant="outline" onClick={() => openExchangeDialog(r)} className="flex-1 shadow-sm border-slate-200 dark:border-slate-700">
+                Exchange
               </Button>
             </div>
             <button 
@@ -751,6 +796,67 @@ export function ActiveRentals() {
               <div className="flex justify-end space-x-2 pt-4">
                 <Button type="button" variant="outline" onClick={() => setIsReturnOpen(false)}>Cancel</Button>
                 <Button type="submit">Complete Rental</Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isExchangeOpen} onOpenChange={setIsExchangeOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Exchange Vehicle</DialogTitle>
+          </DialogHeader>
+          {selectedRental && (
+            <form onSubmit={handleExchange} className="space-y-4">
+              <div className="space-y-2">
+                <Label>Current Vehicle</Label>
+                <div className="p-3 bg-slate-100 dark:bg-slate-900 rounded-md text-sm border font-medium">
+                  {selectedRental.vehicle.vehicleName} ({selectedRental.vehicle.vehicleNumber})
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Select New Vehicle</Label>
+                <Select value={exchangeFormData.newVehicleId} onValueChange={v => setExchangeFormData({...exchangeFormData, newVehicleId: v})} required>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a replacement vehicle">
+                      {exchangeFormData.newVehicleId ? (
+                        (() => {
+                          const selectedVeh = vehicles.find(v => v.id === exchangeFormData.newVehicleId);
+                          return selectedVeh ? `${selectedVeh.vehicleName} (${selectedVeh.vehicleNumber})` : 'Choose a replacement vehicle';
+                        })()
+                      ) : null}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {vehicles.map(v => (
+                      <SelectItem key={v.id} value={v.id}>{v.vehicleName} ({v.vehicleNumber})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>What happened to the old vehicle?</Label>
+                <Select value={exchangeFormData.oldVehicleStatus} onValueChange={v => setExchangeFormData({...exchangeFormData, oldVehicleStatus: v})} required>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="AVAILABLE">It is fine (Available)</SelectItem>
+                    <SelectItem value="INACTIVE">It needs repair (Inactive)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Reason for Exchange</Label>
+                <Input value={exchangeFormData.reason} onChange={e => setExchangeFormData({...exchangeFormData, reason: e.target.value})} placeholder="e.g., Engine failure, flat tire..." required />
+                <p className="text-xs text-muted-foreground">This note will be permanently added to the rental record.</p>
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-4">
+                <Button type="button" variant="outline" onClick={() => setIsExchangeOpen(false)}>Cancel</Button>
+                <Button type="submit" className="bg-amber-600 hover:bg-amber-700 text-white shadow-sm">Exchange Vehicle</Button>
               </div>
             </form>
           )}

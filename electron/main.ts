@@ -416,6 +416,30 @@ ipcMain.handle('return-vehicle', async (_, { rentalId, returnData, vehicleId }) 
   return rental;
 });
 
+ipcMain.handle('swap-vehicle', async (_, { rentalId, oldVehicleId, newVehicleId, oldVehicleStatus, notesAppend }) => {
+  const rental = await prisma.rental.findUnique({ where: { id: rentalId } });
+  if (!rental) throw new Error("Rental not found");
+
+  const newNotes = rental.notes ? `${rental.notes}\n\n${notesAppend}` : notesAppend;
+
+  const [updatedRental] = await prisma.$transaction([
+    prisma.rental.update({
+      where: { id: rentalId },
+      data: { vehicleId: newVehicleId, notes: newNotes }
+    }),
+    prisma.vehicle.update({
+      where: { id: oldVehicleId },
+      data: { status: oldVehicleStatus }
+    }),
+    prisma.vehicle.update({
+      where: { id: newVehicleId },
+      data: { status: 'RENTED' }
+    })
+  ]);
+  
+  return updatedRental;
+});
+
 ipcMain.handle('get-rentals', async (_, filter: any = {}) => {
   if (filter.returnDate) {
     if (filter.returnDate.gte) filter.returnDate.gte = new Date(filter.returnDate.gte);

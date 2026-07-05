@@ -119,6 +119,7 @@ export function Reports() {
         'Settlement': r.settlementAmount || 0,
         'Net Amount': r.totalAmount || 0,
         'Deposit': r.depositAmount || 0,
+        'Notes': r.notes || '',
       }));
 
       // Add a summary row
@@ -136,6 +137,7 @@ export function Reports() {
         'Settlement': totalSettlements,
         'Net Amount': totalRevenue,
         'Deposit': '' as any,
+        'Notes': '',
       });
 
       const worksheet = XLSX.utils.json_to_sheet(data);
