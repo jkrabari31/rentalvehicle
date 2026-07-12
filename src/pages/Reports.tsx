@@ -7,7 +7,7 @@ import { invokeIPC } from '@/lib/ipc';
 import { useAppStore } from '@/store';
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
-import { FileSpreadsheet, FileDown, CalendarRange, Lock, DollarSign } from 'lucide-react';
+import { FileSpreadsheet, FileDown, CalendarRange, Lock, DollarSign, Wallet } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export function Reports() {
@@ -22,6 +22,7 @@ export function Reports() {
   const { currencySymbol } = useAppStore();
 
   const [rentals, setRentals] = useState<any[]>([]);
+  const [activeRentals, setActiveRentals] = useState<any[]>([]);
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [revStartDate, setRevStartDate] = useState(today);
   const [revEndDate, setRevEndDate] = useState(today);
@@ -63,7 +64,9 @@ export function Reports() {
 
     const r = await invokeIPC<any[]>('get-rentals', filter);
     const v = await invokeIPC<any[]>('get-vehicles');
+    const activeR = await invokeIPC<any[]>('get-rentals', { status: 'ACTIVE' });
     setRentals(r || []);
+    setActiveRentals(activeR || []);
     if (v && vehicles.length === 0) setVehicles(v);
   };
 
@@ -75,6 +78,7 @@ export function Reports() {
 
   const totalRev = rentals.reduce((sum, r) => sum + (Number(r.totalAmount) || 0), 0);
   const totalBase = totalRev - rentals.reduce((sum, r) => sum + (Number(r.settlementAmount) || 0), 0);
+  const totalAdvanceInHand = activeRentals.reduce((sum, r) => sum + (Number(r.depositAmount) || 0), 0);
 
   const handleExport = async (formatType: 'excel' | 'csv', overrideStart?: string, overrideEnd?: string) => {
     setIsExporting(true);
@@ -341,7 +345,7 @@ export function Reports() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div className="bg-white dark:bg-slate-950 p-6 rounded-xl border shadow-sm">
                 <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-2">Total Revenue</p>
                 <h3 className="text-4xl font-bold text-emerald-600 dark:text-emerald-400">{currencySymbol}{totalRev.toFixed(2)}</h3>
@@ -351,6 +355,13 @@ export function Reports() {
                 <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-2">Base Income</p>
                 <h3 className="text-3xl font-bold">{currencySymbol}{totalBase.toFixed(2)}</h3>
                 <p className="text-sm text-slate-500 mt-2">Without settlement adjustments</p>
+              </div>
+              <div className="bg-amber-50 dark:bg-amber-950/30 p-6 rounded-xl border border-amber-200 dark:border-amber-800 shadow-sm">
+                <p className="text-sm font-medium text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-2 flex items-center">
+                  <Wallet className="w-4 h-4 mr-1.5" /> Advance In Hand
+                </p>
+                <h3 className="text-4xl font-bold text-amber-600 dark:text-amber-400">{currencySymbol}{totalAdvanceInHand.toFixed(2)}</h3>
+                <p className="text-sm text-amber-600/70 dark:text-amber-500/70 mt-2">{activeRentals.length} active rental{activeRentals.length !== 1 ? 's' : ''}</p>
               </div>
               <div className="bg-white dark:bg-slate-950 p-6 rounded-xl border shadow-sm flex flex-col justify-center items-center text-center">
                 <p className="text-sm font-medium text-muted-foreground mb-1">Quick Filters</p>
